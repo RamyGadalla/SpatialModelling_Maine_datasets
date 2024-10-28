@@ -1,13 +1,11 @@
 ---
 title: "Lab6"
-author: "Ramy Gadalla"
-date: "2022-11-08"
 output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = '/Volumes/GoogleDrive/My Drive/Classes/Electives/SIE512/Week9/')
+knitr::opts_knit$set(root.dir = '.')
 ```
 
 Load the necessary package
@@ -27,7 +25,7 @@ library('tseries')
 Read the data
 ```{r results='hide', warning=FALSE, message=FALSE}
 cal_content <- st_read(dsn =
-          '/Volumes/GoogleDrive/My Drive/Classes/Electives/SIE512/Week9/Lab6Data/calcium.shp')
+          './calcium.shp')
 
 cal_content =st_as_sf(cal_content,coords = c('X','Y'))
 ```

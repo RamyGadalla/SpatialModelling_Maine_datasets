@@ -7,7 +7,7 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir ='/Volumes/GoogleDrive/My Drive/Classes/Electives/SIE512/Week2/lab1')
+knitr::opts_knit$set(root.dir ='.')
 getwd()
 ```
 # Lab 1
@@ -22,7 +22,7 @@ library(dplyr) # a package for data manipulation
 ```
 ## Read the data
 ```{r}
-wjdata <- read.csv("Lab1_2022/WJData.csv", header = T, row.names = 1)
+wjdata <- read.csv("./WJData.csv", header = T, row.names = 1)
 summary(wjdata)
 ```
 

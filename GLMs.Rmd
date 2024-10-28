@@ -1,0 +1,186 @@
+---
+title: "GLM"
+
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+```
+
+
+```{r}
+
+oring=read.csv('C:/Data/oringv1.csv')
+
+```
+
+```{r}
+oring
+```
+
+
+```{r}
+ggplot(data=oring, aes(x=temp, y=td))+geom_point(data=oring, aes(col=factor(td),size=.5 ))+scale_color_manual(values=c('red','lightblue')) + labs(col='Failure')
+```
+
+Applying glm to Challenger O-ring test data
+
+```{r}
+oring.glm=glm(formula = oring$td ~ oring$temp, family = "binomial")
+summary(oring.glm)
+```
+
+Another way to formulate the model
+
+```{r}
+oring.glm=glm(td ~ temp, family = "binomial", data=oring)
+summary(oring.glm)
+```
+
+The Null deviance - the deviance   - approximates F test of goodness of fit.
+
+```{r}
+G=oring.glm$null.deviance-oring.glm$deviance
+G
+1-pchisq(G,1)
+```
+
+
+Plot the residuals
+
+```{r}
+plot(oring.glm)
+```
+
+Plot the data and fitted model
+
+```{r}
+p=exp(15.0429-0.2322*oring$temp)/(1+exp(15.0429-0.2322*oring$temp))
+
+plot(c(50,80), c(0,1), type="n", xlab="temperature", ylab="probability",main="ORing Failure")
+points(oring$temp,oring$td, pch=16)
+lines(oring$temp,p, col=4, lwd=2)
+
+```
+
+inverse logit transforms log odds to probability for temperature = 60
+
+```{r}
+p=exp(15.0429-0.2322*60)/(1+exp(15.0429-0.2322*60))
+p
+```
+
+Does a higher order perform better?
+
+```{r}
+mod.2=glm(td ~ temp + I(temp^2) ,family = "binomial", data=oring)
+summary(mod.2)
+```
+
+```{r}
+anova(oring.glm,mod.2, test='Chisq')
+```
+
+
+
+Blue Oak data from Plant text
+
+```{r include=FALSE}
+library(sf)
+
+```
+
+
+```{r }
+data.Set2S <- st_read("C:/Data/set2sierra.shp")
+```
+
+```{r}
+summary(data.Set2S)
+```
+
+```{r}
+summary(data.Set2S$QUDO)
+```
+
+ Set up a binomial  glm.
+ 
+```{r}
+
+glm.demo <- glm(QUDO ~ Elevation, data = data.Set2S,
+   family = binomial)
+summary(glm.demo)
+
+
+```
+
+Check the portion of deviance explained
+
+```{r}
+
+(glm.demo$null.deviance-glm.demo$deviance)/glm.demo$null.deviance
+glm.demo$null.deviance-glm.demo$deviance
+1-pchisq(1004.718,1)
+```
+
+Plot the data and fitted model
+
+```{r}
+par(mai = c(1,1,1,1))
+plot(data.Set2S$Elevation, data.Set2S$QUDO, # Fig. 8.8
+   main = "Sierra Nevada Blue Oaks vs. Elevation",
+   cex.main = 1.5, pch=16, col=2,xlab = "Elevation (m)",
+   ylab = "Blue Oak Presence/Absence", cex.lab = 1.5)
+elev.seq <- data.frame(Elevation = seq(0,2000,50))
+lines(seq(0,2000,50), predict(glm.demo, elev.seq,
+   type = "response"), lwd=2, col=4)
+```
+
+Plot the residuals
+
+```{r}
+plot(glm.demo)
+```
+
+
+Try a higher order model
+
+```{r}
+glm.demo2 <- glm(QUDO ~ Elevation + I(Elevation^2), data = data.Set2S,
+   family = binomial)
+summary(glm.demo2)
+```
+
+```{r}
+glm.demo2$null.deviance-glm.demo2$deviance
+1-pchisq(1009.567,2)
+(glm.demo2$null.deviance-glm.demo2$deviance)/glm.demo2$null.deviance
+```
+
+
+```{r}
+anova(glm.demo, glm.demo2, test='Chisq')
+```
+
+```{r}
+plot(glm.demo2)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

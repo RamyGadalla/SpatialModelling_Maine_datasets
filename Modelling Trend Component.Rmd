@@ -1,0 +1,192 @@
+---
+title: "GadallaLab2"
+author: "Ramy Gadalla"
+date: "21/09/2022"
+output: pdf_document
+---
+
+# Lab 2
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir ='/Volumes/GoogleDrive/My Drive/Classes/Electives/SIE512/Week3/lab2')
+getwd()
+```
+
+Load necessary packages.
+```{r results='hide', warning=FALSE, message=FALSE}
+library(ggplot2)
+library(fields)
+library(lmtest)
+library(tseries)
+```
+
+Read the data and view the summary. 
+
+```{r}
+phyto <- read.csv("phytophthora.csv", header = T)
+str(phyto)
+```
+
+Plot the soil moisture variable using the local coordinates (x,y). Difference soil moisture is represented as size and color gradient.
+
+```{r}
+ggplot(phyto, aes(x=X, y=Y, size =soilm, col=soilm)) +
+ scale_color_gradient(low="brown", high="yellow") +
+ geom_point() + ggtitle("Soil Moisture")
+```
+There is an obvious spatial trend in the soil moisture variable as seen in the bigger size and the yellowish color of the bubbles at the lower left corner of the plot. To be able to study a the subtrend in this dataset, the surface trend needs to be modeled and subtracted from the data.
+
+## Linear Model Trend
+
+Next chunk of code generate linear model for soil moisture as a response to spatial coordinates X and Y. And, generate diagnostic plots to be able to assess the model.
+```{r out.width="50%"}
+soilm.lm <- lm(soilm ~ X + Y, data = phyto)
+summary(soilm.lm)
+plot(soilm.lm)
+```
+
+Visual assessment of the diagnostic plots shows that the residuals exhibit homoscadasticity i.e the residuals are even distributed around zero (this will need to be confirmed by rigorous significance test of heteroscadasticity). Normal Q-Q plots shows normality of the residuals. lastly, according to Cooks distance and residual vs leverage plot, no outlier points have significant effect on the model. 
+
+
+Testing for heterscadasticity
+```{r}
+bptest(soilm.lm)
+```
+Breusch-Pagan test confirm the visual assessment that the residual are homoscadastic. BP statistic equals 4.01 and p value = 0.13 i.e we fail to reject null hypothesis that the error variances are all equal for the residuals.
+
+Testing for normality
+```{r}
+jarque.bera.test(soilm.lm$residuals)
+```
+Results from Jarque Bera test came against my visual assessment of normal q-q plot. JB statistic = 17798 and p value = 2.2e16 indicating a non-zero value to either the skewness or the kurtosis of the soil moisture distribution, which points out to deviation from normality to soil moisture variable. 
+
+To double check these results, we can plot a histogram of soil moisture residuals. 
+
+```{r warning=FALSE, message=FALSE}
+ggplot(soilm.lm, aes(x=soilm.lm$residuals)) + 
+  geom_histogram(aes(y=..density..),color="black", fill="white") +
+  geom_density(alpha=.2, fill="#FF6666") + xlim(2,20) +
+  xlab("soil moisture") + ggtitle("Soil Moisture Residual") 
+```
+
+Fitting a linear model with additional interaction term for coordinates X and Y.
+```{r out.width="50%"}
+soilm.lm2 <- lm(soilm ~ X+Y+I(X*Y), data=phyto)
+summary(soilm.lm2)
+plot(soilm.lm2)
+bptest(soilm.lm2)
+jarque.bera.test(soilm.lm2$residuals)
+```
+
+In terms of residual diagnostics for the model with the interaction terms, like the first model, residuals are homoscadasctic according to BP test, the distribution deviates from normality according to JB test. No data point seems to exert outlier influence on the model. The interaction term model however results in lower R residual standard error and higher R square adjusted, which could imply that the influence on soil moisture happens in both directions and not dependent on only one direction.
+
+
+## Median Polish Trend
+
+Create a matrix from the soil moisture column.
+```{r}
+soilmatrix <- as.matrix(phyto$soilm)
+soilmatrix <- matrix(soilmatrix, nrow = 20)
+soilmatrix
+```
+
+Calculating median polish matrix
+```{r}
+soil_medpolish <- medpolish(soilmatrix)
+soil_medpolish
+```
+
+Obtaining median polish trend by subtracting the median polish residuals from the original matrix.
+```{r}
+soil_medpolish_trend <- soilmatrix - soil_medpolish$residuals
+soil_medpolish_trend
+```
+
+Plotting the median polish trend
+```{r}
+image.plot(soil_medpolish_trend, col=terrain.colors(24))
+```
+This plot confirms what the bubble plot showed earlier that the soil mositure trend is increasing at the lower left corner of the field.
+
+## Colored prespective plot for soil moisture
+
+```{r}
+x=4*1:20  # creates a  4 times scaling
+y=4*1:20
+nrz=20  #number of rows
+ncz=20  # number of columns
+jet.colors <- colorRampPalette( c("blue","green" ,"yellow") ) # creates a color palette
+# Generate the desired number of colors from this palette
+nbcol <- 100
+color <- jet.colors(nbcol)
+z=soilmatrix
+# Compute the z-value at the facet centers
+zfacet <- (z[-1, -1] + z[-1, -ncz] + z[-nrz, -1] + z[-nrz, -ncz])/4
+facetcol <- cut(zfacet, nbcol)
+persp(x, y, z, col = color[facetcol], phi = 20, theta = 40)
+zlim<- range( c(zfacet), na.rm=TRUE)
+image.plot( zlim=zlim, legend.only =TRUE, horizontal =FALSE)
+```
+
+## Colored perspective plots for the two linear regresion models
+```{r}
+trend.ln1 <- predict(soilm.lm)
+trend.ln2 <- predict(soilm.lm2)
+soilm_trend1 <- matrix(trend.ln1, nrow=20)
+soilm_trend2 <- matrix(trend.ln2, nrow=20)
+```
+
+```{r fig.show='hold', out.width="50%"}
+x=4*1:20  # creates a  4 times scaling
+y=4*1:20
+nrz=20  #number of rows
+ncz=20  # number of columns
+jet.colors <- colorRampPalette( c("blue","green" ,"yellow") ) # creates a color palette
+# Generate the desired number of colors from this palette
+nbcol <- 100
+color <- jet.colors(nbcol)
+z1 <- soilm_trend1
+z2 <- soilm_trend2
+# Compute the z-value at the facet centers
+zfacet1 <- (z1[-1, -1] + z1[-1, -ncz] + z1[-nrz, -1] + z1[-nrz, -ncz])/4
+facetcol1 <- cut(zfacet1, nbcol)
+persp(x, y, z, col = color[facetcol1], phi = 20, theta = 40)
+zlim1 <- range(c(zfacet), na.rm=TRUE)
+image.plot(zlim=zlim1, legend.only =TRUE, horizontal =FALSE)
+
+zfacet2 <- (z2[-1, -1] + z2[-1, -ncz] + z2[-nrz, -1] + z2[-nrz, -ncz])/4
+facetcol2 <- cut(zfacet2, nbcol)
+persp(x, y, z, col = color[facetcol2], phi = 20, theta = 40)
+zlim2 <- range(c(zfacet), na.rm=TRUE)
+image.plot(zlim=zlim2, legend.only =TRUE, horizontal =FALSE)
+```
+
+The trend from the second lieanr model with the interaction term seems to fit the data better, just by comparing the perspective plot from the original data and the trend from the two linear models.
+
+## Colored perspective plots for the trend from median polish
+
+```{r}
+x=4*1:20  # creates a  4 times scaling
+y=4*1:20
+nrz=20  #number of rows
+ncz=20  # number of columns
+jet.colors <- colorRampPalette( c("blue","green" ,"yellow") ) # creates a color palette
+# Generate the desired number of colors from this palette
+nbcol <- 100
+color <- jet.colors(nbcol)
+z=soil_medpolish_trend
+# Compute the z-value at the facet centers
+zfacet <- (z[-1, -1] + z[-1, -ncz] + z[-nrz, -1] + z[-nrz, -ncz])/4
+facetcol <- cut(zfacet, nbcol)
+persp(x, y, z, col = color[facetcol], phi = 20, theta = 40)
+zlim<- range( c(zfacet), na.rm=TRUE)
+image.plot( zlim=zlim, legend.only =TRUE, horizontal =FALSE)
+```
+
+
+The median polish does not capture the trend in the data as good as linear regression models, judging by comparing the perspective plot of the original data and perspective plot from median polish trend. The second linear model with the interaction term does the best job.
+
+
+
+

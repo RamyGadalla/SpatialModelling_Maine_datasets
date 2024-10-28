@@ -1,0 +1,88 @@
+---
+title: "GadallaLab5"
+author: "Ramy Gadalla"
+date: "2022-10-18"
+geometry: margin=2cm
+output: pdf_document
+---
+
+# Lab 5
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '/Volumes/GoogleDrive/My Drive/Classes/Electives/SIE512/Week8/ChicagoV2')
+getwd()
+```
+
+Load the necessary package
+```{r results='hide', warning=FALSE, message=FALSE}
+library(sf)
+library(spdep)
+library(ggplot2)
+library(classInt)
+library(broom)
+library(spatialreg)
+library(lmtest)
+library(tseries)
+```
+
+Task 1 - Read the data in R
+```{r results='hide', warning=FALSE, message=FALSE}
+chicago <- st_read(dsn = 
+          '/Volumes/GoogleDrive/My Drive/Classes/Electives/SIE512/Week8/ChicagoV2/ChicagoV2.shp')
+```
+
+Task 2 - Fit a generalized linear model
+```{r results='hold'}
+chicago_glm <- glm(VlntCrRt ~ ChldPov14 + NoHS14, data = chicago)
+summary(chicago_glm)
+logLik(chicago_glm)
+BIC(chicago_glm)
+```
+
+
+Task 3 - LeGrange Multipler Test
+```{r warning=FALSE}
+# Construct wight matrix - Binary
+nbs <- poly2nb(chicago, queen = FALSE)
+weights <- nb2listw(nbs, style = "B")
+
+#LM test
+lmtests=lm.LMtests(chicago_glm, weights, zero.policy = T, test='all')
+lstat=unlist(c(lmtests$LMerr[1],lmtests$LMlag[1], lmtests$RLMerr[1],lmtests$RLMlag[1], lmtests$SARMA[1]))
+pval=(c(lmtests$LMerr[3],lmtests$LMlag[3], lmtests$RLMerr[3],lmtests$RLMlag[3], lmtests$SARMA[3]))
+cbind(lstat, pval)
+```
+
+
+Task 4 - Fitting both spatial lag and spatial error term models.
+```{r}
+#Spatial lag model
+slag=lagsarlm(VlntCrRt ~ NoHS14+ChldPov14,data=chicago, listw=weights, zero.policy = T)
+
+#Spatial error term model
+serror <- errorsarlm(VlntCrRt ~ NoHS14+ChldPov14,data=chicago, listw=weights, zero.policy = T)
+
+#Conditional autoregressive model
+scar=spautolm(VlntCrRt~ NoHS14+ChldPov14,data=chicago, listw=weights, zero.policy = T, family='CAR')
+```
+
+
+
+Task 5 - Models Comparison
+```{r}
+AIC <- AIC(chicago_glm, slag, serror, scar)
+BIC <- BIC(chicago_glm, slag, serror, scar)
+LL_vector <- c(logLik(chicago_glm), slag$LL, serror$LL, scar$LL)
+
+cbind(AIC, BIC, LL_vector)[-3]
+```
+
+
+
+From LM test results, both spatial lag and error models are significant. However, taking in consideration robust LM test spatial lag model has significant value and therefore more appropriate than spatial error. This leave the choice between OLS and spatial lag model. The OLS has lowest value in all the model comparison criteria. 
+I think the spatial lag model is more robust that OLS in this case. Since the data points represent communities and the effect of location is well established, the spatial lag model will capture that effect. OLS could also be used but maybe variable "community" fitted to the model.
+
+
+
+

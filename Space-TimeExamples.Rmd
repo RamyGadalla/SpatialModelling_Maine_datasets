@@ -1,0 +1,218 @@
+---
+title: "Space-Time"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = 'C:/Data/')
+```
+
+
+```{r include=FALSE}
+library(splancs)
+library(spatstat)
+library(ggplot2)
+library(sf)
+library(ade4)
+```
+
+Function to compute the Knox test 
+
+```{r}
+knoxX=function (s,t, crit_s, crit_t){
+  X=sum(s < crit_s & s !=0&t < crit_t & t !=0)
+  return(X)} 
+
+knoxsim <- function(t,s,crit_s, crit_t,nsim){
+  hold <- matrix(0,nsim)
+  for (i in 1:nsim){
+    temp <- sample(t, length(t))
+    difft <- dist(temp, method= "manhattan")
+    hold[i] <- knoxX(s, difft, crit_s, crit_t)}
+  return(hold)}
+
+knoxZScoretest <-function(diffs, difft,crit_s, crit_t, n){
+  sumspace=sum(diffs < crit_s & diffs != 0 ) 
+  sumtime=sum(difft < crit_t & difft !=0) 
+  exKnox=(2*sumspace*sumtime)/(n*(n-1))
+}
+
+Knoxtest <-function(data, crit_s, crit_t, nsims, alpha){ 
+          s<-dist(cbind(data$x, data$y))
+          t<-dist((data$t), method = "manhattan")
+          times = data$t
+          #t<-dist((data$marks), method = "manhattan")
+          #times = data$marks
+          n=length(times)
+          X = knoxX(s,t, crit_s, crit_t)
+          simulations<- knoxsim(times,s,crit_s, crit_t,nsims)
+          simulations
+          hist(simulations ,main="Monte Carlo Distribution of Knox",       col='lightblue',xlab="Simulated Knox values", xlim=c(min(simulations), (X+4)))
+          abline(v=X, col=2)
+          NGE=sum(simulations>X)
+          p_value = round((NGE+1)/(nsims +1),3)
+          zt=knoxZScoretest(s, t, crit_s, crit_t,n)
+          zvalue=(X-zt)/(sqrt(zt))
+          result1=(ifelse(p_value<alpha, "reject CSTR", "Do not reject CSTR"))
+          pz=pnorm(zvalue, lower.tail = F)
+          result2 =(ifelse(pz<alpha, "reject CSTR", "Do not reject CSTR"))
+          output=c("ObsKnox"=X, "NGE"=NGE, "P_value"=p_value,"result1"=result1, "expectedKnox"=round(zt,2),"zvalue"=round(zvalue,2),"zpvalue"=round(pz,3), "result2"=result2)
+          return(output)}
+
+
+```
+
+
+```{r}
+data(burkitt)
+```
+
+Locations of cases of Burkitt's lymphoma in the Western Nile district of Uganda 1960-1975. The time variable is recorded as the number of days starting from an origin of 1 Jan 1960. 
+
+```{r}
+summary(burkitt)
+```
+
+```{r}
+ggplot(data=burkitt, aes(x=x,y=y,col=t))+geom_point(size=2)+scale_color_gradient(low='red', high="white") +theme_dark()+labs(col='Time')+ggtitle('Burkitts Lymphoma')
+```
+
+Test on burkitts lymphoma e.g. using 180 days and 4 km
+
+```{r}
+
+getknox <- Knoxtest(data=burkitt,2,180, nsims=199, alpha=.05)
+getknox
+```
+
+ Test Idaho forest fires from 2017 for space time interaction
+ 
+```{r include=FALSE}
+
+fires=read_sf('Firesmallset.shp')
+```
+
+```{r}
+summary(fires)
+```
+
+```{r}
+ggplot()+geom_sf(data=fires,aes(col=JULIAN), size=2.8) + scale_color_distiller(palette = "RdBu", direction = 1)+ ggtitle("Fires by Year Day")+ theme_dark()
+                 
+```
+
+Convert forest fire data to format for Knoxtest
+
+```{r}
+xy=st_coordinates(fires)
+x=xy[,1]
+y=xy[,2]
+firesnew=data.frame(x/1000,y/1000,fires$JULIAN)
+#firesnew=data.frame(x,y,fires$JULIAN)
+colnames(firesnew)=c("x","y","t")
+
+```
+
+```{r}
+summary(firesnew)
+```
+
+```{r}
+sdist<-dist(cbind(firesnew$x,firesnew$y))
+mean(sdist)
+```
+
+
+Test fires data for space-time interaction -7000
+
+```{r}
+Knoxtest(firesnew,10,10, 199,.05)
+```
+
+
+Mantel Test
+The Mantel test can be used to test for spatial autocorrelation.  For autocorrelation the tests uses
+spatial distances
+attribute distances
+
+
+It can also be used to test for space-time interaction. For space-time interaction test use
+spatial distances
+time distances
+
+
+Set up for Mantel test
+
+
+
+
+```{r}
+s<-dist(cbind(burkitt$x,burkitt$y))
+t<-dist(burkitt$t,method= "manhattan")
+
+```
+
+Set up of fires data for Mantel test
+
+```{r}
+s<-dist(cbind(firesnew$x,firesnew$y))
+t<-dist(firesnew$t,method= "manhattan")
+
+```
+
+Compute the Mantel test. This test reports the mantel score - a correlation value and its pvalue based on how extreme the observed  value is relative the set of mantel values generated from some number of permutations: eg. 99
+
+```{r}
+plot(mantel.randtest(s,t,99))
+
+```
+
+
+Convert burkitt data to spatstat ppp file
+
+```{r}
+xmin=min(burbdy[,1])
+xmax=max(burbdy[,1])
+ymin=min(burbdy[,2])
+ymax=max(burbdy[,2])
+W <- owin(c(xmin,xmax), c(ymin,ymax))
+```
+
+```{r}
+burk.ppp=as.ppp(burkitt, W=W)
+burk.ppp$marks=burkitt$t
+```
+
+```{r}
+bL=Lest(burk.ppp)
+plot(bL, .-r ~r)
+```
+
+L function test for spatial clustering
+
+```{r}
+burk.lenv = envelope(burk.ppp, Lest, 19, global=T)
+plot(burk.lenv, cbind(obs,hi,lo,theo)-theo ~theo, col=c(2,1,1,4),lwd=c(2,1,1,1),lty=c(1,1,1,2),main ="Lymphoma Cases",legend=F)
+legend("right" ,legend=c("obs","hi","lo", "theo"), col=c(2,1,1,4), lwd=c(2,1,1,1),lty=c(1,1,1,2), box.lty=0)
+```
+
+
+Space and Time K functions from splancs
+
+Apply Monte carlo test of space-time Kfunction for space-time interaction
+
+```{r}
+bur1mc <- stmctest(burpts, burkitt$t, burbdy, c(400, 5800),
+  seq(1,40,2), seq(100, 1500, 100), nsim=49, quiet=TRUE, returnSims=TRUE)
+
+```
+
+
+```{r}
+hist(bur1mc$t)
+abline(v=bur1mc$t0, col=2)
+
+```
+
+

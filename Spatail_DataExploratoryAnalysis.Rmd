@@ -1,0 +1,153 @@
+---
+title: "GadallaLab1"
+author: "Ramy Gadalla"
+date: "12/09/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir ='/Volumes/GoogleDrive/My Drive/Classes/Electives/SIE512/Week2/lab1')
+getwd()
+```
+# Lab 1
+## Load the necessary packages
+```{r results='hide', warning=FALSE, message=FALSE}
+
+library(ggplot2) # for creating graphics
+library(e1071) # a package with skewness and kurtosis functions
+library(knitr) # package to render markdown
+library(sf) # package to support simple features
+library(dplyr) # a package for data manipulation
+```
+## Read the data
+```{r}
+wjdata <- read.csv("Lab1_2022/WJData.csv", header = T, row.names = 1)
+summary(wjdata)
+```
+
+## Task 1
+### Calculate means of Temp and Sal and join in a single column
+```{r}
+wjdata_mean_temp <- mean(wjdata$Temp)
+wjdata_mean_sal <- mean(wjdata$Sal)
+means <- rbind(wjdata_mean_temp, wjdata_mean_sal)
+means
+```
+### Calculate variance of Temp and Sal and join in a single column
+```{r}
+wjdata_var_temp <- var(wjdata$Temp)
+wjdata_var_sal <- var(wjdata$Sal)
+vars <- rbind(wjdata_var_temp, wjdata_var_sal)
+vars
+```
+### Calculate skewness of Temp and Sal and join in a single column
+```{r}
+wjdata_skew_temp <- skewness(wjdata$Temp)
+wjdata_skew_sal <- skewness(wjdata$Sal)
+skewness <- rbind(wjdata_skew_temp, wjdata_skew_sal)
+skewness
+```
+### Calculate kurtosis of Temp and Sal and join in a single column
+```{r}
+wjdata_kurtosis_temp <- kurtosis(wjdata$Temp)
+wjdata_kurtosis_sal <- kurtosis(wjdata$Sal)
+kurtosis <- rbind(wjdata_kurtosis_temp, wjdata_kurtosis_sal)
+kurtosis
+```
+### Construct dataframe with 4 columns and 2 rows
+```{r}
+df <- cbind(means, vars, skewness, kurtosis)
+rownames(df) <- c("Temperature" , "Salinity")
+colnames(df) <- c("Mean", "Variance" , "Skewness", "Kurtosis")
+kable(df)
+```
+
+From the above summary table, distribution of the temperature parameter has high variation between the data points with variance equals 47.14 and it is lightly skewed to the left (skewness = -0.3). Kurtosis value is -0.63 shows that most of the values are centered around the mean with few point at the tail of the distribution (light tailed distribution). Salinity distribution looks different with mean equals 29.9 and less variation (variance=6.9). The distribution of Salinity is more skewed to the left (Skewness=-4.6), and it is heavy-tailed distribution with kurtosis equals 37.15.
+
+### Adding month and year columns to the dataframe
+```{r}
+x= as.POSIXlt(wjdata$Date, tz="GMT", format="%d-%b-%y")
+mo <-strftime(x,"%m") #extracts month from Date field 
+yr <- strftime(x,"%Y") #extracts year from Date field
+wjdata2 <- cbind(wjdata, Month=mo, Year=yr)
+head(wjdata2)
+```
+
+## Task 2
+### Creating histograms with density plot overlaid
+```{r fig.show="hold", out.width="50%", message=FALSE}
+#temperature
+ggplot(wjdata2, aes(x=Temp)) + 
+  geom_histogram(aes(y=..density..),color="black", fill="white") +
+  geom_density(alpha=.2, fill="#FF6666") +
+  xlab("Temperature") + ggtitle("Tempature Historgram") 
+  
+#Salinity 
+ggplot(wjdata2, aes(x=Sal)) + 
+  geom_histogram(aes(y=..density..),color="black", fill="white") +
+  geom_density(alpha=.2, fill="#FF6666") +
+  xlab("Salinity") + ggtitle("Salinity Histogram") 
+```
+
+## Task 3
+### Creating boxplot for temperature with Station and Month variables
+```{r  fig.show="hold", out.width="50%", message=FALSE}
+ggplot(wjdata2, aes(x=Station,y=Temp)) + 
+  geom_boxplot() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle("Boxplot of temperature across stations")
+
+ggplot(wjdata2, aes(x=Month,y=Temp)) + 
+  geom_boxplot() + ggtitle("Boxplot of temperature across months")
+
+```
+
+### Creating boxplot for Sal with Station and Month variables
+```{r  fig.show="hold", out.width="50%", message=FALSE}
+ggplot(wjdata2, aes(x=Station,y=Sal)) + 
+  geom_boxplot() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle("Boxplot of salinity across stations")
+
+ggplot(wjdata2, aes(x=Month,y=Sal)) + 
+  geom_boxplot() + ggtitle("Boxplot of salinity across months")
+```
+
+Boxplots shows great variability of temperature across the year. The highest temperature is at July and August and the lowest temperature is around January and February. Salinity does not vary notcicably across different Stations. 
+
+
+## Task 4
+### Read data files
+```{r results='hide'}
+Cascopts <-  st_read (dsn ="Lab1_2022/WJSubStations.shp")
+SubSetBays <- st_read (dsn ="Lab1_2022/CascoSubBay.shp")
+```
+
+### Plot points and polygon data
+```{r fig.show="hold", out.width="50%"}
+ggplot() + geom_sf(data = Cascopts)
+ggplot() + geom_sf(data = SubSetBays)
+```
+
+
+### Creating aggregate summary of Salinity grouped by Stations using the mean
+```{r}
+wjdf <- aggregate(wjdata$Sal, list(Station=wjdata$Station), mean)
+colnames(wjdf)[colnames(wjdf) == 'x'] <- 'Mean Salinity'
+head(wjdf)
+```
+
+### Joining the new dataframe to the sf object
+```{r}
+newdf <- left_join(SubSetBays,wjdf,by=c(LOCATION_I="Station"))
+head(newdf)
+```
+
+### Plotting the map with Mean salinity value represented as color gradient
+```{r warning=FALSE}
+ggplot(newdf) + geom_sf (aes(fill= newdf$`Mean Salinity`)) +
+  scale_fill_distiller(direction=1, palette="Reds", aesthetics = "fill") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + xlab("") + ylab("") +
+  geom_sf_text(aes(label = LOCATION_I), color = "black" , size =1.5) +
+  guides(fill=guide_legend(title="Mean Salinity")) 
+```
+

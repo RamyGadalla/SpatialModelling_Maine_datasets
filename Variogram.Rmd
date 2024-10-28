@@ -1,0 +1,225 @@
+---
+title: "Lab6"
+author: "Ramy Gadalla"
+date: "2022-11-08"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '/Volumes/GoogleDrive/My Drive/Classes/Electives/SIE512/Week9/')
+```
+
+Load the necessary package
+
+```{r results='hide', warning=FALSE, message=FALSE}
+library('sp')
+library('st')
+library('gstat')
+library('nlme')
+library('ggplot2')
+library('sf')
+library('spdep')
+library('lmtest')
+library('tseries')
+```
+
+Read the data
+```{r results='hide', warning=FALSE, message=FALSE}
+cal_content <- st_read(dsn =
+          '/Volumes/GoogleDrive/My Drive/Classes/Electives/SIE512/Week9/Lab6Data/calcium.shp')
+
+cal_content =st_as_sf(cal_content,coords = c('X','Y'))
+```
+
+Plot calcium content
+
+```{r  fig.height=3.5}
+ggplot(cal_content, aes(x=X, y=Y, size =calcium, col=calcium))+ 
+  scale_color_gradient(low="brown", high="yellow")+ 
+  geom_point() + 
+  ggtitle("Calcium Content")
+```
+
+Visual examination of the plot shows a pattern of higher calcium content in the 
+North compared to the South.
+
+
+# Part 1: Surface Trend
+
+Fitting linear model
+```{r}
+linear_model =lm(calcium ~ X + Y, data=cal_content)
+summary(linear_model)
+```
+
+Given the above results of fitting a linear mode, approximately 20% of the variance in the calcium content is explained
+location (x and y), as it shows in the value of the adjusted R-square. 
+Coefficients significance indicates that the south/north direction (Y axis) has significant impact on calcium content. But, the west/east direction does not have a significant impact/association on calcium content. 
+
+Test of independence in the model residuals using Moran's I test for residuals
+
+```{r}
+# first neightbor list and wegith matrix needs to be created to be able to 
+#calculate Moran's I for residuals
+
+knn_2 <- knearneigh(cal_content, k=2)            # knn with k = 2
+nlistcalcium <- knn2nb(knn_2)                    #create neighbor list
+Wcalcium <- nb2listw(nlistcalcium, style = 'W')  #creat weight list
+
+lm.morantest(linear_model, Wcalcium)
+```
+
+
+Moran's I test of the linear model shows spatial dependence in the residuals (p value =  7.4e-9).
+
+Diagnostics plots of the residuals
+```{r fig.show="hold", out.width="50%"}
+plot(linear_model)
+```
+
+Statistical test for residual heteroscadasticity and normality
+```{r results='hold'}
+
+bptest(linear_model)                       # test for heteroscadasticity 
+
+jarque.bera.test(linear_model$residuals)  # test for normality
+
+```
+
+
+Breusch-Pagan test shows significant heteroscadasticity in the residuals (also confirmed by residuals vs fitted plot). Jarque-Bera test shows significant deviation for normality in the residuals that are also confirmed by Q-Q plot.
+
+
+Adding the residuals to sf object and map them.
+```{r fig.width=7 , fig.height=5}
+
+linear_model$residuals -> cal_content$residuals_lm
+
+ggplot()+geom_sf(data=cal_content,aes(col=residuals_lm, size=residuals_lm)) + 
+  scale_color_distiller(palette = "RdBu")+ 
+  ggtitle("Residuals")+ theme_dark()+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+Plotting residual shows less dependence compared to non-fitted data, which points to the prescence pf surface trend in the data.
+
+
+Fitting a quadratic model
+```{r}
+quad_model <- lm(calcium ~ X+Y+I(X^2)+I(Y^2)+I(X*Y), data=cal_content)
+summary(quad_model)
+```
+
+
+Assessing quadratic model
+```{r results= 'hold', warning=FALSE, message=FALSE, fig.show="hold", out.width="50%" }
+
+plot(quad_model)
+bptest(quad_model) 
+jarque.bera.test(quad_model$residuals)
+lm.morantest(quad_model, Wcalcium)
+```
+
+Given the diagnostic plots and statistical tests results above, the residuals of the quadratic model shows no significant deviation from normality and the residuals have constant variance. Spatial dependence still exists in the data. The quadratic model explain approximately 35% of the variance (r-squared = 0.34)
+
+Comparing the two models using anova
+```{r}
+anova(linear_model, quad_model)
+```
+The reduction in the residuals sum squares between the linear and the quadratic is significant. Quadratic model appears to be an improvement over the linear.
+
+
+
+## Part 2: Variograms
+
+```{r out.width="50%", fig.show='hold'}
+var1.calcium<-variogram(residuals_lm ~ 1, data=cal_content)
+head(var1.calcium)
+plot(var1.calcium,pch=1, main= "Variogram") 
+# plot(var1.calcium,pch=16,pl=T) to add number of points that are used to estimate semivariance
+covar.calcium<-variogram(residuals_lm ~ 1, data=cal_content, covariogram=T)
+plot(covar.calcium,pch=16, main="Covariogram")
+```
+For the variogram (approx.):
+Nugget = 45, range = 200, sill = 80
+
+For the covariogram (approx.):
+Nugget = 85, range = 160, sill = 0
+
+Variogram shows the distance over which the data points are dissimilar (how far the spatial lag goes). The covariogram shows the distance over show the data points are similar. Both are measures to express spatial autocorrelation of continous data.
+
+
+Fitting a variogram model to the empirical variogram
+```{r}
+Ca1.vgm<-vgm(80, "Sph", 180, 1)
+plot(var1.calcium, pch=16, Ca1.vgm)
+```
+
+Fitting a variogram by Weighted Least Squares
+```{r  fig.show='hold'}
+CaSph.fit<-fit.variogram(var1.calcium, Ca1.vgm)
+CaSph.fit
+plot(var1.calcium, pch=16,CaSph.fit)
+```
+
+
+
+Fitting variogram to the quadratic model
+```{r fig.show='hold', results='hold', out.width="50%"}
+quad_model$residuals -> cal_content$residuals_quad
+
+var2.calcium <-variogram(residuals_quad ~ 1, data=cal_content)
+plot(var2.calcium,pch=1, main= "Variogram") 
+
+covar2.calcium <-variogram(residuals_quad ~ 1, data=cal_content, covariogram=T)
+plot(covar2.calcium,pch=16, main="Covariogram")
+
+
+Ca2.vgm<-vgm(70, "Sph", 140, 1)
+plot(var2.calcium, pch=16, Ca2.vgm)
+CaSph.fit2<-fit.variogram(var2.calcium, Ca2.vgm)
+CaSph.fit2
+plot(var2.calcium, pch=16,CaSph.fit2)
+
+```
+
+
+
+## Part 3 a Generalized Least Squares model with a covariance structure 
+
+the linear Model
+```{r}
+Model_1 <- gls(calcium ~ X + Y, data = cal_content)
+Model_2 <- gls(calcium ~ X + Y, data = cal_content, corr = corSpher(form = ~ X + Y))
+summary(Model_1)
+summary(Model_2)
+```
+
+Model 2 shows no significant in the coefficients of X and Y (unlike Model 1 which shows significance for the y coordinates). This might be because the spatial autocorrelation in the data has been accounted for by specifying spherical covariance structure in the generalized least square regression.
+
+
+The quadratic model
+```{r}
+Model_3 <- gls(calcium ~ X + Y +I(X^2)+I(Y^2)+I(X*Y), data = cal_content)
+Model_4 <- gls(calcium ~ X + Y +I(X^2)+I(Y^2)+I(X*Y), data = cal_content, corr = corSpher(form = ~ X + Y))
+summary(Model_3)
+summary(Model_4)
+```
+
+
+Model 4,the coefficient are not significant. Possibly, because the variance has been accounted for by adding spherical covariance structure to the model.
+
+Models Comparison
+```{r warning=FALSE, message=FALSE}
+AIC <- AIC(Model_1, Model_2, Model_3, Model_4)
+BIC <- BIC(Model_1, Model_2, Model_3, Model_4)
+LL_vector <- c(Model_1$logLik, Model_2$logLik, Model_3$logLik, Model_4$logLik)
+cbind(AIC, BIC, logLik = LL_vector)[-3]
+```
+
+The linear model with spherical covariance structure (Model 2) has the lowest AIC and BIC values.
+
+
+

@@ -1,0 +1,154 @@
+---
+title: "Point pattern simulation"
+
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir ='C:/Courses/SIE512/Data/Chicago/')
+```
+
+
+```{r include=FALSE}
+library(sf)
+library(sp)
+library(spatstat)
+library(ggplot2)
+library(splancs)
+```
+
+Read in polygon  and point shapefiles
+
+```{r}
+NCpoly=st_read('NorthCenterPoly.shp')
+NCCrimes=st_read(dsn = "NorthCenterCrimes.shp")
+```
+
+
+```{r}
+summary(NCCrimes)
+```
+
+Create a subset of one crime type
+
+```{r}
+DP = NCCrimes[NCCrimes$Primary.Ty == "DECEPTIVE PRACTICE",]
+
+```
+
+```{r}
+summary(DP)
+```
+
+```{r}
+g1=ggplot(NCpoly) +
+  geom_sf(fill ='bisque')+theme(legend.position = "none")  
+g2=g1+ geom_sf(data=NCCrimes, aes(col=as.factor(Primary.Ty))) 
+g2
+```
+
+```{r}
+xy=st_coordinates(NCCrimes)
+```
+
+We need x y coordinate lists to create a ppp file.
+Use st_coordinates to get xy in matrix format
+
+Next extract x and y as vectors
+
+```{r}
+head(xy)
+x=xy[,1]
+y=xy[,2]
+head(y)
+```
+
+Use the polygon file to create the window using as.owin()
+
+```{r}
+NC=as.owin(NCpoly)
+#crimetype=NCCrimes$Primary.Ty
+crimes1=ppp(x,y, window=NC)
+```
+```{r}
+class(crimes1)
+```
+
+Use unique to remove duplicate points
+
+```{r}
+crimes=unique(crimes1)
+```
+
+```{r}
+plot(crimes,pch=16)
+```
+
+get as bandwidth estimate
+
+```{r}
+bw=bw.diggle(crimes)
+bw
+
+```
+
+```{r}
+d1=density(crimes, bw=60)
+plot(d1, main='Intensity for crimes, \nsigma=60')
+points(crimes, pch=16) 
+```
+```{r}
+jet.colors <- colorRampPalette( c("blue","yellow" ,"orange") )
+
+M=persp(d1, colmap = jet.colors, main='Crimes Intensity',theta=220, phi=20, visible=T)
+perspPoints(crimes, Z=d1, M=M, pch=16, cex=1, col="dark green")
+perspContour(d1, M=M, col='gray')
+```
+```{r}
+crimes.g=Gest(crimes)
+plot(crimes.g, main='Crimes Ghat function')
+```
+```{r}
+crimes.l=Lest(crimes)
+plot(crimes.l, main='Crimes Square K function')
+```
+```{r}
+plot(crimes.l, .-r~r,main='Crimes Lfunction')
+```
+
+```{r}
+quadcountcrimes=quadratcount(crimes,nx=3, ny=4) # of quadrats in x and y
+plot(crimes, pch=16, cols='darkgreen')
+plot(quadcountcrimes, add=T)
+```
+
+```{r}
+quadrat.test(crimes,3,4)
+```
+
+Clark Evans test. A value R>1 suggests ordering, R<1 suggests clustering.
+
+```{r}
+clarkevans.test(crimes)
+```
+
+```{r}
+crimes.gs=envelope(crimes, Gest, nsim=39)
+plot(crimes.gs, main='Simulation envelope for crimes')
+```
+
+```{r}
+crimes.gs=envelope(crimes, Gest, nsim=39, global = TRUE)
+plot(crimes.gs, main='Simulation envelope for crimes')
+```
+```{r}
+br.ls=envelope(crimes, Lest, nsim=39)
+plot(br.ls,.-r~r, main='Simulation envelope for crimes')
+```
+
+
+```{r}
+br.ls=envelope(crimes, Lest, nsim=39, global = T)
+plot(br.ls,.-r~r, main='Simulation envelope for crimes')
+```

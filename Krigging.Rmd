@@ -1,0 +1,176 @@
+---
+title: "GadallaLab7"
+author: "Ramy Gadalla"
+date: "2022-11-14"
+output: pdf_document
+---
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = 
+              '/Volumes/GoogleDrive/My Drive/Classes/Electives/SIE512/Week11')
+```
+Load the necessary package
+
+```{r results='hide', warning=FALSE, message=FALSE}
+library(sf)
+library(ggplot2)
+library(gstat)
+library(sp)
+```
+
+Adding column of the nickel log values. 
+```{r}
+nickel <- read_sf("./Nickel/Nickel.shp")
+logNi=log(nickel$Ni)
+nickel$logNi=logNi
+summary(nickel)
+```
+
+Plotting nickel spatial distribution.
+```{r}
+ggplot()+geom_sf(data=nickel,aes(col=logNi, size=logNi)) + 
+  scale_color_gradient(low='yellow', high='blue') + 
+  ggtitle("Nickel") + theme_dark()
+```
+From the above plot, nickel concentration seems to be higher in the middle of the field of study.
+
+
+Creating validation and test data set
+```{r results='hold'}
+sample_size = floor(0.8*nrow(nickel)) 
+nrow(nickel) 
+sample_size 
+
+set.seed(1234) 
+picked = sample(seq_len(nrow(nickel)),size = sample_size)
+niTest = nickel[picked,] 
+niVal = nickel[-picked,] 
+```
+
+Plotting histograms and boxplots to check distribution of test and validation data sets.
+```{r  warning=FALSE, message=FALSE, fig.show="hold", out.width="50%"}
+
+Type=rep('Val',nrow(niVal)) # creates category ‘Val’ for validation type
+NiV1=(cbind(niVal,Type))
+Type=rep('Test',nrow(niTest)) # creates category ‘Test’ for test type
+NiT1=cbind(niTest,Type)
+CombNi=rbind(NiT1,NiV1)
+
+
+ggplot(CombNi, aes(x=factor(Type), logNi)) + geom_boxplot(col="gray", fill="lightblue") + stat_summary(fun=mean,shape=15,col='red', size= 2.5,geom='point')+xlab("Valdiation versus Test Samples")
+
+ggplot(CombNi, aes(logNi)) + geom_histogram(bins=8,col="gray", fill="lightblue")+
+  facet_wrap(~Type)
+```
+
+Both data sets seems to have same mean and variance.
+
+
+Compute and create a variogram object, and plot it.
+```{r}
+Ni.var1<-variogram(logNi ~1, data=niTest)
+plot(Ni.var1, pch=16)
+```
+
+Fitting a variogram model to the empirical variogram by weighted least squares (WLS), and plot it.
+```{r warning=FALSE, message=FALSE, fig.show="hold", out.width="50%"}
+
+NiSph.fit<-fit.variogram(Ni.var1, vgm(.6, "Sph", 20000, .4))
+NiExp.fit<-fit.variogram(Ni.var1, vgm(.6, "Exp", 20000, .4))
+
+plot(Ni.var1, pch=16,NiSph.fit)
+plot(Ni.var1, pch=16,NiExp.fit)
+```
+
+
+Assessing the speherical and exponential models
+```{r}
+attr(NiSph.fit, "SSErr")
+attr(NiExp.fit, "SSErr")
+```
+
+Given the above, SSErr values, the spherical model firs better.
+
+
+# Ordinary Kriging
+
+Perform ordinary kriging based on WLS fit model for the test data
+
+```{r warning=FALSE, message=FALSE, fig.show="hold", out.width="50%"}
+geosp=as_Spatial(nickel)
+pred.grid<-spsample(geosp, 1000, type="regular")
+plot(pred.grid)
+
+nisp=as_Spatial(niTest)
+
+set.seed(131)
+sph.k <- krige(formula = logNi~1, locations=nisp, model = NiSph.fit, 
+          newdata = pred.grid, nmax = 15) 
+
+summary(sph.k)
+```
+
+Plotting prediction and krigging variance 
+```{r warning=FALSE, message=FALSE, fig.show="hold", out.width="50%"}
+sph.k %>% as.data.frame %>%
+  ggplot(aes(x=x1, y=x2)) + geom_tile(aes(fill=var1.pred)) + coord_equal() +
+  scale_fill_gradient(low = "lightblue", high="red") +
+ theme_bw()
+
+sph.k %>% as.data.frame %>%
+  ggplot(aes(x=x1, y=x2)) + geom_tile(aes(fill=var1.var)) + coord_equal() +
+  scale_fill_gradient(low = "white", high="blue") +
+ theme_bw()
+
+```
+
+The prediction do fit the observed data. from the figure on the left, the nickel
+concentration is higher in the center of study field.
+
+```{r warning=FALSE, message=FALSE, fig.show="hold", fig.height=3}
+niSph.val<-krige(logNi ~1, locations=nisp, newdata= niVal, model=NiSph.fit)
+
+diffSph<- niVal$logNi-niSph.val$var1.pred # observed nickel – predicted nickel
+
+rmseSph<-sqrt(sum(diffSph^2)/length(diffSph))
+MESph<-sum(diffSph/length(diffSph))
+
+nidf=cbind(niVal,diffSph)
+
+ggplot(nidf)+geom_sf(data=,aes(col=factor(sign(diffSph)), size=abs(as.numeric(diffSph)))) + 
+  scale_color_manual(values = c("red", "blue"), name='Residual Sign', labels=c("Negative", "Positive" )) +scale_size_area(name='Residual Size')+
+ theme_dark()
+
+```
+
+
+# Cross validation
+```{r warning=FALSE, message=FALSE, fig.show="hold", results='hold'}
+niSph.cv<-krige.cv(logNi~1, nisp, model=NiSph.fit, nfold=nrow(nisp))
+
+
+#mean error 
+sphcvmean=mean(niSph.cv$residual)
+sphcvmean
+#RMSE, ideally small
+sphcvrmse<-sqrt(mean(niSph.cv $residual^2))
+sphcvrmse
+#ratio of kriging variance to cross-validation residual
+sphcvmsdr=mean((niSph.cv$residual^2)/ (niSph.cv$var1.var))
+sphcvmsdr
+
+```
+
+
+
+Give the values above, I would say that the model works very well. The mean error value is close to zero, meaning
+that the model is not over- or under-predicting nickel values in the validation data. The second values, RMSE speaks to the average deviation of the predicted values from the measured values. The predicted values has 0.68 deviation units from the measured values (that is in the original data unit). That is very small considering the much larger variance the data has. 
+
+I think the ratio of kriging variance to cross-validation quadratic residuals is not informative on its own. It is used to standardize the error to be able to compare the model performance across different data sets on a comparable scale.
+
+
+
+
+
+

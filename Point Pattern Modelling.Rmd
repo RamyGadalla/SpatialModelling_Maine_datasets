@@ -1,0 +1,144 @@
+---
+title: "GadallaLab8"
+author: "Ramy Gadalla"
+date: "2022-11-22"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = 
+              '/Volumes/GoogleDrive/My Drive/Classes/Electives/SIE512/Week13/')
+```
+
+
+```{r results='hide', warning=FALSE, message=FALSE}
+library(spatstat)
+library(splancs)
+
+```
+
+Loading the internal data from packages spatstat and splancs.
+```{r}
+data(cardiff) 
+cardiffnew= as.ppp(cardiff) 
+data(gordon)
+```
+
+Plotting the two datasets
+```{r warning=FALSE, message=FALSE, fig.show="hold", out.width="50%"}
+plot(cardiffnew, pch=16)
+plot(gordon, pch=16)
+```
+
+# 1. Intensity of both point pattern datasets with kernel estimates
+```{r warning=FALSE, message=FALSE, fig.show="hold", out.width="50%", results='hold'}
+Bw1cardiff = bw.diggle(cardiffnew)
+Bw1gordon = bw.diggle(gordon)
+
+Bw1cardiff
+Bw1gordon
+
+plot(density(cardiffnew,2.16), main = "Cardiff, sigma 2.16")
+plot(density(gordon, 0.7), main = "Gordon, sigma = 0.7")
+
+plot(density(cardiffnew,4), main = "Cardiff, sigma 4")
+plot(density(gordon, 1), main = "Gordon, sigma = 1")
+```
+
+The output values from the bw.diggle function capture the variation in intensity. I find that increasing the sigma value causes resolution lose and less representative of the actual variation in the dataset.
+
+
+
+# 2. Evaluate cardiff data
+
+First order effect exploration
+```{r}
+quadrat.test(cardiffnew, nx = 3, ny = 3)
+```
+
+Results of Chi square test (X^2=32.5 and p value = 0.000) suggest the data set does not follow a process of compelete spatial randomness. 
+
+
+Data model fitting
+```{r}
+Fit1=ppm(cardiffnew,  ~1) 
+Fit2=ppm(cardiffnew,  ~x+y) 
+Fit3=ppm(cardiffnew,  ~ polynom(x, y, 2)) 
+```
+
+
+Model comparisons
+```{r warning=FALSE, message=FALSE, results='hold'}
+AIC(Fit1)
+AIC(Fit2)
+AIC(Fit3)
+```
+
+
+AIC comparison suggests that the second order inhomogeneous poisson model (Fit3) works better for Cardiff data set.
+
+Performing anova test to compare between models
+```{r warning=FALSE, message=FALSE, results='hold'}
+anova(Fit1, Fit2, test = "Chi")
+anova(Fit1, Fit3, test = "Chi")
+```
+
+Both models are significantly different from CSR model, which confirms that the spatial process is not completely random or following poisson point pattern.
+
+
+Second order effect Cardiff data
+
+```{r warning=FALSE, message=FALSE, fig.show="hold", out.width="50%", results='hold'}
+#Ghat
+cardiffnewG.env<-envelope(cardiffnew, fun=Gest, nsim=39, global =TRUE)
+cardiffnewG.env
+plot(cardiffnewG.env, legend=F, main = "Ghat")
+
+# Lhat
+cardiffnewL.env<-envelope(cardiffnew, fun=Lest, nsim=39, global =TRUE)
+plot(cardiffnewL.env, .-r ~ r, legend= F, main= "Lhat")
+```
+
+
+
+Evaluating the two plots of Ghat and Lhat, it shows that the point pattern deviates from poisson pattern, i.e there is point-point dependency. Points tend to cluster.
+
+
+# 3. Evaluate Gordon data set
+
+first order departure
+```{r warning=FALSE, message=FALSE, results='hold'}
+quadrat.test(gordon, nx = 3, ny = 3)
+
+
+Fit1g=ppm(gordon,  ~1) 
+Fit2g=ppm(gordon,  ~x+y) 
+Fit3g=ppm(gordon,  ~ polynom(x, y, 2)) 
+
+AIC(Fit1)
+AIC(Fit2)
+AIC(Fit3)
+
+anova(Fit1g, Fit2g, test = "Chi")
+anova(Fit1g, Fit3g, test = "Chi")
+```
+
+Chi-square quadrat test is significant, meaing Gordon data deviate from complete spatial randomness model.
+AIC seems to indicate that the second order inhomogenous model fit the data better than the other two models.
+Anova test also that first order inhomogenous model is not significant and that the second order inhomogenous model works better with Gordon data.
+
+
+Second order effect
+```{r warning=FALSE, message=FALSE, fig.show="hold", out.width="50%", results='hold'}
+#Ghat
+gordon.env <- envelope(gordon, fun=Gest, nsim=39, global =TRUE)
+gordon.env
+plot(gordon.env, legend=F, main = "Ghat")
+
+# Lhat
+gordon.env <- envelope(gordon, fun=Lest, nsim=39, global =TRUE)
+plot(gordon.env, .-r ~ r, legend=F, main= "Lhat")
+```
+
+I think from the plot, I can say that mostly Gordon data set the points are clustering together, but there are smaller tendency for some points to be independent. 

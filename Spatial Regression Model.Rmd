@@ -1,7 +1,5 @@
 ---
 title: "GadallaLab5"
-author: "Ramy Gadalla"
-date: "2022-10-18"
 geometry: margin=2cm
 output: pdf_document
 ---
@@ -10,7 +8,7 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = '/Volumes/GoogleDrive/My Drive/Classes/Electives/SIE512/Week8/ChicagoV2')
+knitr::opts_knit$set(root.dir = '')
 getwd()
 ```
 

@@ -9,7 +9,7 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = '/Volumes/GoogleDrive/My Drive/Classes/Electives/SIE512/Week6/ChicagoV2')
+knitr::opts_knit$set(root.dir = './ChicagoV2')
 getwd()
 ```
 
@@ -26,7 +26,7 @@ library(tseries)
 
 Task 1 - Read the data in R
 ```{r results='hide', warning=FALSE, message=FALSE}
-chicago <- st_read(dsn = '/Volumes/GoogleDrive/My Drive/Classes/Electives/SIE512/Week6/ChicagoV2/ChicagoV2.shp')
+chicago <- st_read(dsn = ./ChicagoV2.shp')
 ```
 
 
@@ -43,7 +43,7 @@ ggplot()  +
   coord_sf() + theme_dark()
 ```
 
-![](/Volumes/GoogleDrive/My Drive/Classes/Electives/SIE512/Week6/Geoda_6nbreaks.png)
+![](/./Geoda_6nbreaks.png)
 
 Task 3
 Scatter plot in Geoda of the violent crime rate against child poverty
@@ -88,7 +88,7 @@ Jarque Bera test results in a p value  2.063e-09, which point to deviation from 
 
 Task 6 Map of residuals
 
-![](/Volumes/GoogleDrive/My Drive/Classes/Electives/SIE512/Week6/residuals.png)
+![](./residuals.png)
 
 Visually, clusters of positive residual exists south of Chicago.
 

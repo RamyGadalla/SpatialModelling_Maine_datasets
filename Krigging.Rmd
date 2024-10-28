@@ -1,14 +1,13 @@
 ---
 title: "GadallaLab7"
-author: "Ramy Gadalla"
-date: "2022-11-14"
+
 output: pdf_document
 ---
 
 ```{r}
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(root.dir = 
-              '/Volumes/GoogleDrive/My Drive/Classes/Electives/SIE512/Week11')
+              '')
 ```
 Load the necessary package
 
